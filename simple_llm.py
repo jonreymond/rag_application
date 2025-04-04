@@ -4,7 +4,7 @@ from langchain_ibm import WatsonxLLM
 from ibm_watsonx_ai.metanames import GenTextParamsMetaNames as GenParams
 
 import json
-
+import gradio as gr
 
 
 
@@ -35,4 +35,19 @@ llm = WatsonxLLM(
 
    )
 
-print(llm.invoke("are you alive?"))
+
+def generate_response(prompt):
+    return llm.invoke(prompt)
+
+
+
+chat_application = gr.Interface(
+    fn=generate_response,
+    allow_flagging="never",
+    inputs=gr.Textbox(label="Input", lines=2, placeholder="Type your question here..."),
+    outputs=gr.Textbox(label="Output"),
+    title="Watsonx.ai Chatbot",
+    description="Ask any question and the chatbot will try to answer."
+)
+# Launch the app
+chat_application.launch(server_name="127.0.0.1", server_port= 7860)
