@@ -1,0 +1,27 @@
+credential_path: credentials.json
+
+# LLM params
+llm:
+  model_id: mistralai/mixtral-8x7b-instruct-v01
+  MAX_NEW_TOKENS: 256
+  TEMPERATURE: 0.5
+  
+# Embedding params
+embed:
+  model_id: ibm/slate-125m-english-rtrvr
+  TRUNCATE_INPUT_TOKENS: 3
+  RETURN_OPTIONS: 
+    input_text: True
+  
+# splitter params
+splitter:
+  _target_: langchain.text_splitter.RecursiveCharacterTextSplitter
+  chunk_size: 1000
+  chunk_overlap: 50
+
+# gradio params
+gradio:
+  title: RAG Chatbot
+  description: Upload a PDF document and ask any question. The chatbot will try to answer using the provided document
+  server_name: 127.0.0.1
+  server_port: 7860
