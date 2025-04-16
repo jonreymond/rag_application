@@ -3,12 +3,16 @@ from ibm_watsonx_ai.metanames import GenTextParamsMetaNames as GenParams
 from ibm_watsonx_ai.metanames import EmbedTextParamsMetaNames
 from ibm_watsonx_ai import Credentials, APIClient
 from langchain_ibm import WatsonxLLM, WatsonxEmbeddings
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.text_splitter import RecursiveCharacterTextSplitter, LatexTextSplitter
 from langchain_community.vectorstores import Chroma
-from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain.chains import RetrievalQA
 import gradio as gr
 import json
+import pathlib
+
+from enum import Enum
+
 
 import hydra
 from hydra.utils import get_original_cwd, to_absolute_path, instantiate, get_method
@@ -38,6 +42,7 @@ def getCredentials(credential_path):
 # QA Chain
 def retriever_qa(file, query, splitter, embedding_model, llm):
     # Document Load and Split
+    print(file)
     splits = PyPDFLoader(file).load()
 
     chunks = splitter.split_documents(splits)
@@ -52,8 +57,70 @@ def retriever_qa(file, query, splitter, embedding_model, llm):
                                     retriever=retriever, 
                                     return_source_documents=False)
     response = qa.invoke(query)
-    return response['result']
+    return file + "   " + response['result']
 
+
+class Task(Enum):
+    display_raw = "Display raw document content"
+    display_splits_latex = "Display document latex splits"
+    display_embedding = "Display embeddings"
+    similarity_search = "Similarity search"
+    retriever = "Retriever"
+    QA_bot = "QA bot"
+
+
+
+def fetcher(file, query:str, splitter, task:Task, embedding_model:WatsonxEmbeddings, llm:WatsonxLLM):
+    if task == Task.display_embedding:
+        return embedding_model.embed_query(query)[:5]
+        
+    
+    suffix = pathlib.Path(file).suffix
+    if suffix == ".pdf":
+        splits = PyPDFLoader(file).load()
+
+    elif suffix == ".txt":
+        splits = TextLoader(file).load()
+        
+    else:
+        raise ValueError("Unsupported file type. Please upload a .pdf or .txt file.")
+    
+    if task == Task.display_raw:
+        res = ""
+        for doc in splits:
+            res += doc.page_content
+            if len(res) > 1000:
+                break
+        return res[:1000]
+    
+    if task == Task.display_splits_latex:
+        latex_text = ""
+        for doc in splits:
+            latex_text += doc.page_content
+        return LatexTextSplitter(chunk_size=100, chunk_overlap=20).split_text(latex_text)
+    
+    chunks = splitter.split_documents(splits)
+    vectordb = Chroma.from_documents(chunks, embedding_model)
+    if task == Task.similarity_search:
+        res = vectordb.similarity_search(query, k=5)
+        return [entry_res.page_content for entry_res in res]
+    
+    retriever = vectordb.as_retriever(search_type="similarity", search_kwargs={"k": 2})
+    if task == Task.retriever:
+        return [entry_res.page_content for entry_res in retriever.invoke(query)]
+    
+    if task == Task.QA_bot:
+        
+        qa = RetrievalQA.from_chain_type(llm=llm, 
+                                        chain_type="stuff", 
+                                        retriever=retriever, 
+                                        return_source_documents=False)
+        response = qa.invoke(query)
+        return response['result']
+    
+    else:
+        return 
+        
 
 
 
@@ -87,16 +154,16 @@ def main(config):
     # Text splitter
     splitter = instantiate(config["splitter"])
 
+     
 
     fn = lambda file, query: retriever_qa(file, query, splitter, embedding_model, llm)
-
 
     # Create Gradio interface
     rag_application = gr.Interface(
         fn=fn,
         allow_flagging="never",
         inputs=[
-            gr.File(label="Upload PDF File", file_count="single", file_types=['.pdf'], type="filepath"),  # Drag and drop file upload
+            gr.File(label="Upload PDF File", file_count="single", file_types=['.pdf'], type="filepath"), 
             gr.Textbox(label="Input Query", lines=2, placeholder="Type your question here...")
         ],
         outputs=gr.Textbox(label="Output"),
