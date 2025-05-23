@@ -12,9 +12,9 @@ This project builds a Retrieval-Augmented Generation (RAG) AI assistant designed
 1. Create the Conda environment:
 """conda env create -f environment.yml"""
 2. Activate the environment:
-"""conda activate <env_name>"""
+"""conda activate rag"""
 3. Test the setup by running: 
-"""python gradio_demo.py"""
+"""python qa_boot.py"""
 
 ### IBM API Setup
 
